@@ -42,6 +42,7 @@ var app = $.sammy(function() {
         $('#filter').addClass('hide');
         $('#salamisandwich').removeClass('hide').find("tr:gt(0)").remove();
         $('#dirble_panel').addClass('hide');
+        $('#somafm_panel').addClass('hide');
         socket.send('MPD_API_GET_QUEUE,'+pagination);
 
         $('#panel-heading').text("Queue");
@@ -152,6 +153,26 @@ var app = $.sammy(function() {
         dirble_stations = false;
 
         if (dirble_api_token) { dirble_load_categories(); }
+    });
+
+
+    this.get(/\#\/somafm\//, function() {
+        console.log("get2");
+        prepare();
+        current_app = 'somafm';
+        $('#breadcrump').addClass('hide');
+        $('#salamisandwich').addClass('hide');
+
+        $('#panel-heading').text("Soma.fm");
+        $('#somafm').addClass('active');
+        
+        $('#somafm_panel').removeClass('hide');
+        $('#somafm_loading').removeClass('hide');
+        
+        $('#somafm_left').find("tr:gt(0)").remove();
+        $('#somafm_right').find("tr:gt(0)").remove();
+
+        somafm_load_stations();
     });
 
     this.get("/", function(context) {
@@ -947,6 +968,86 @@ function dirble_load_categories() {
                 dirble_selected_cat = $(this).text();
                 dirble_catid = $(this).attr("catid");
                 app.setLocation("#/dirble/"+dirble_catid+"/"+dirble_page);
+            }
+        });
+    });
+}
+
+// https://stackoverflow.com/a/12452845/10176225
+function parseINIString(data){
+    var regex = {
+        section: /^\s*\[\s*([^\]]*)\s*\]\s*$/,
+        param: /^\s*([^=]+?)\s*=\s*(.*?)\s*$/,
+        comment: /^\s*;.*$/
+    };
+    var value = {};
+    var lines = data.split(/[\r\n]+/);
+    var section = null;
+    lines.forEach(function(line){
+        if(regex.comment.test(line)){
+            return;
+        }else if(regex.param.test(line)){
+            var match = line.match(regex.param);
+            if(section){
+                value[section][match[1]] = match[2];
+            }else{
+                value[match[1]] = match[2];
+            }
+        }else if(regex.section.test(line)){
+            var match = line.match(regex.section);
+            value[match[1]] = {};
+            section = match[1];
+        }else if(line.length == 0 && section){
+            section = null;
+        };
+    });
+    return value;
+}
+
+function somafm_load_stations() {
+    $.get("https://somafm.com/listen", function(data) {
+        $("#somafm_loading").addClass("hide");
+        
+        $('#somafm_left').removeClass('hide');
+        $('#somafm_right').removeClass('hide');
+        
+        var html = $.parseHTML($.trim(data));
+        $("#somafm_box").empty().append(html);
+
+        stations = $("#somafm_box #stations ul li").each(function(id) {
+            var station = $(this);
+            
+            var title = station.find("h3").text()
+            //var url = station.querySelector("p:eq( 1 )").innerText
+            var url = station.find("dl dd a").attr("href")
+            console.log(station, title, url)
+
+            $('#somafm_left > tbody').append(
+                "<tr><td url=\""+url+"\">"+title+"</td></tr>"
+            );
+        });
+
+        $('#somafm_left > tbody > tr > td').on({
+            click: function() {
+                var _this = $(this);
+                var pls_url = "https://somafm.com"+_this.attr("url");
+
+                console.log("querying playlist", pls_url);
+
+                $.get(pls_url, function( data ) {
+                    var pls = parseINIString(data);
+                    var stream = pls.playlist.File1;
+                    
+                    console.log("adding track", stream)
+
+                    //socket.send("MPD_API_ADD_TRACK," + stream);
+                    socket.send("MPD_API_ADD_PLAY_TRACK," + stream);
+                    $('.top-right').notify({
+                        message:{
+                            text: _this.text() + " added"
+                        }
+                    }).show();
+                });
             }
         });
     });
