@@ -1005,7 +1005,7 @@ function parseINIString(data){
 }
 
 function somafm_load_stations() {
-    $.get("https://somafm.com/listen", function(data) {
+    $.get("https://somafm.com/listen/", function(data) {
         $("#somafm_loading").addClass("hide");
         
         $('#somafm_left').removeClass('hide');
